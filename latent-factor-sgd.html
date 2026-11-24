@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Latent Factor Models and SGD</title>
+<style>
+:root{--bg:#f6f6f3;--card:#fff;--ink:#1d1d1f;--mute:#6b6b72;--line:#e1e1dc;--q:#0e7c86;--p:#7c3aed;--err:#b45309;--train:#2563eb;--test:#dc2626;--good:#15803d;--bad:#b91c1c;--hl:#fff1a8;--cell:#fafaf8}
+@media (prefers-color-scheme:dark){:root{--bg:#131316;--card:#1d1d21;--ink:#ececee;--mute:#9b9ba4;--line:#33333a;--q:#4cc3cc;--p:#a78bfa;--err:#fbbf24;--train:#60a5fa;--test:#f87171;--good:#4ade80;--bad:#f87171;--hl:#5c4d00;--cell:#232328}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:24px;margin:0 0 4px}
+h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--mute);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+.q{color:var(--q);font-weight:600}.p{color:var(--p);font-weight:600}.e{color:var(--err);font-weight:600}
+.mute{color:var(--mute)}
+.small{font-size:13px}
+.fm{font-family:Cambria,"Times New Roman",serif;font-size:18px;padding:5px 10px;border-radius:8px;margin:3px 0;white-space:nowrap;overflow-x:auto}
+.fm.flash{animation:fl 1s ease-out}
+@keyframes fl{0%{background:var(--hl)}100%{background:transparent}}
+button{font:inherit;padding:6px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;cursor:pointer}
+button:hover{border-color:var(--mute)}
+button.pri{background:var(--train);border-color:var(--train);color:#fff}
+select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.mwrap{overflow-x:auto}
+table.m{border-collapse:separate;border-spacing:3px;margin:0 auto}
+table.m th{font-weight:500;font-size:12px;color:var(--mute)}
+.vh{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:112px;text-align:left}
+th.rh{text-align:right;padding-right:6px;color:var(--ink);font-size:13px}
+td.c{width:46px;height:44px;text-align:center;border-radius:6px;background:var(--cell);border:1px solid var(--line);cursor:pointer;padding:0}
+td.c .rt{font-size:16px;font-weight:700;line-height:20px}
+td.c .pr{font-size:11px;color:var(--mute);line-height:14px}
+td.c.test{border:2px dashed var(--train)}
+td.c.miss .rt{color:var(--mute);font-weight:400}
+td.c.cur{outline:3px solid #eab308;outline-offset:1px}
+td.c.sel{box-shadow:0 0 0 2px var(--p)}
+.legend{font-size:12.5px;color:var(--mute);margin:6px 0 0}
+.sl{display:grid;grid-template-columns:150px 1fr 56px;gap:8px;align-items:center;margin:6px 0}
+.sl input[type=range]{width:100%}
+.sl output{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+svg text{font-family:system-ui,sans-serif}
+#plot{width:100%;height:auto;touch-action:none;background:var(--card);border-radius:8px}
+.gr{stroke:var(--line);stroke-width:1}.ax{stroke:var(--mute);stroke-width:1.2}
+.proj{stroke:var(--err);stroke-width:4;stroke-linecap:round;opacity:.9}
+.proj-d{stroke:var(--err);stroke-width:1.5;stroke-dasharray:4 4}
+.readout{background:var(--cell);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:8px;font-size:14px}
+table.s{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13.5px;margin-top:8px}
+table.s th,table.s td{border-bottom:1px solid var(--line);padding:3px 6px;text-align:right}
+table.s th{color:var(--mute);font-weight:500}
+table.s td.chg{background:var(--hl);font-weight:700}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;margin-top:6px}
+.badge.ok{background:rgba(21,128,61,.14);color:var(--good)}
+.badge.warn{background:rgba(185,28,28,.14);color:var(--bad)}
+.badge.info{background:rgba(120,120,130,.16);color:var(--mute)}
+.warnbox{background:rgba(185,28,28,.12);color:var(--bad);border-radius:8px;padding:6px 10px;margin:6px 0;display:none;font-weight:600}
+details summary{cursor:pointer;font-weight:600}
+ol,ul{margin:6px 0 0 20px;padding:0}
+li{margin:3px 0}
+code{background:var(--cell);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Latent factor models and SGD</h1>
+<p class="sub">Predict missing movie ratings with <b>R ≈ Q·Pᵀ</b>. Drag vectors, step through SGD, tune the sliders, and watch train vs test error.</p>
+
+<details class="card" open>
+<summary>How to use (60 seconds)</summary>
+<ol>
+<li>Click <b>⏩ 50 epochs</b>. The model learns.</li>
+<li>Look at the plot. Each <span class="q">dot</span> is a movie. Each <span class="p">arrow</span> is a user.</li>
+<li>Drag a dot or an arrow tip. Watch <b>r̂</b> change in the readout and in the matrix.</li>
+<li>Click <b>Step</b>. The stepper shows which rating SGD used and how <span class="q">q</span> and <span class="p">p</span> moved.</li>
+<li>Click <b>Overfit preset</b>. Click <b>⏩ 50 epochs</b> two times. Compare the two lines in the chart.</li>
+</ol>
+</details>
+
+<section class="card">
+<h2>The model</h2>
+<div class="fm" id="f-pred">r̂<sub>xi</sub> = μ + <span class="q">q<sub>i</sub></span> · <span class="p">p<sub>x</sub></span> = μ + Σ<sub>f=1</sub><sup>k</sup> <span class="q">q<sub>if</sub></span> <span class="p">p<sub>xf</sub></span></div>
+<div class="fm" id="f-err"><span class="e">ε<sub>xi</sub></span> = r<sub>xi</sub> − r̂<sub>xi</sub></div>
+<div class="fm" id="f-q"><span class="q">q<sub>i</sub></span> ← <span class="q">q<sub>i</sub></span> + η ( <span class="e">ε</span> <span class="p">p<sub>x</sub></span> − λ <span class="q">q<sub>i</sub></span> )</div>
+<div class="fm" id="f-p"><span class="p">p<sub>x</sub></span> ← <span class="p">p<sub>x</sub></span> + η ( <span class="e">ε</span> <span class="q">q<sub>i</sub></span> − λ <span class="p">p<sub>x</sub></span> )</div>
+<div class="fm small" style="font-size:15px">Objective: min Σ<sub>(x,i)∈train</sub> (r<sub>xi</sub> − r̂<sub>xi</sub>)² + λ ( Σ<sub>i</sub> ‖<span class="q">q<sub>i</sub></span>‖² + Σ<sub>x</sub> ‖<span class="p">p<sub>x</sub></span>‖² )</div>
+<p class="legend"><span class="q">q = movie vector</span> · <span class="p">p = user vector</span> · <span class="e">ε = error</span> · η = learning rate · λ = regularization · μ = mean train rating (optional, see Controls). The factor 2 from the derivative is folded into η. The slides use λ₁ and λ₂; this page uses one λ for both.</p>
+</section>
+
+<div class="grid">
+<div>
+<section class="card">
+<h2>1 · Ratings matrix (8 users × 10 movies)</h2>
+<div class="mwrap"><div id="matrix"></div></div>
+<p class="legend">Big number = actual rating. Small gray number = model prediction r̂. Red tint = size of error. <b style="color:var(--train)">Dashed blue border = test rating</b> (held out, SGD never sees it). “–” = unrated. Click a cell to inspect it.</p>
+</section>
+
+<section class="card">
+<h2>Controls</h2>
+<div class="sl"><label for="k">Factors <i>k</i></label><input id="k" type="range" min="1" max="8" step="1" value="2"><output id="kVal">2</output></div>
+<div class="sl"><label for="lr">Learning rate <i>η</i></label><input id="lr" type="range" min="0.005" max="0.1" step="0.005" value="0.03"><output id="lrVal">0.030</output></div>
+<div class="sl"><label for="lam">Regularization <i>λ</i></label><input id="lam" type="range" min="0" max="0.5" step="0.01" value="0.1"><output id="lamVal">0.10</output></div>
+<label class="small"><input id="center" type="checkbox" checked> Subtract the mean rating μ (r̂ = μ + q·p). Turn off for the plain r̂ = q·p.</label>
+<div class="row">
+<button id="pGood">Good preset (k=2, λ=0.10)</button>
+<button id="pOver">Overfit preset (k=8, λ=0)</button>
+</div>
+<p class="legend">Changing <b>k</b> or the μ box restarts training. Changing η or λ does not. You can change them in the middle of a run.</p>
+</section>
+</div>
+
+<section class="card">
+<h2>2 · Drag the vectors</h2>
+<div class="row small">
+<label>User <select id="selU"></select></label>
+<label>Movie <select id="selM"></select></label>
+</div>
+<svg id="plot" viewBox="0 0 520 520" role="img" aria-label="Movies as dots and users as arrows in a 2D factor space"><g id="dyn"></g></svg>
+<p class="legend" id="plotNote"></p>
+<div class="readout" id="readout"></div>
+<p class="legend">Prediction = q·p = (length of the orange projection) × ‖p‖. The orange bar is the projection of the movie onto the user's arrow. A long arrow makes the projection count more.</p>
+</section>
+</div>
+
+<div class="grid">
+<section class="card">
+<h2>3 · SGD stepper</h2>
+<div class="row">
+<button id="step" class="pri">Step</button>
+<button id="play">▶ Play</button>
+<button id="epochBtn">⏭ Epoch</button>
+<button id="run50">⏩ 50 epochs</button>
+<button id="reset">↺ Reset</button>
+<label class="small">Speed <select id="speed"><option value="1">1 step/s</option><option value="4" selected>4 steps/s</option><option value="20">20 steps/s</option><option value="100">100 steps/s</option></select></label>
+</div>
+<div class="warnbox" id="warn">Training diverged (values blew up). Lower η, then click Reset.</div>
+<div class="small mute" id="progress"></div>
+<div id="stepInfo" style="margin-top:6px"></div>
+<div id="stepTable"></div>
+</section>
+
+<section class="card">
+<h2>4 · Train vs test error (RMSE per epoch)</h2>
+<svg id="chart" viewBox="0 0 560 300" style="width:100%;height:auto" role="img" aria-label="Train and test RMSE by epoch"></svg>
+<div class="row small" id="live"></div>
+<div id="badge"></div>
+<div class="row">
+<button id="pin">Pin current curves</button>
+<button id="unpin">Clear pin</button>
+</div>
+<p class="legend">Pin a run, change a slider, restart, and compare. Test RMSE is measured on only 10 ratings, so small moves (±0.05) are noise.</p>
+</section>
+</div>
+
+<section class="card">
+<h2>What to try</h2>
+<ul>
+<li><b>Good fit:</b> Good preset → ⏩ 50 epochs. Train and test both fall.</li>
+<li><b>Overfit:</b> Overfit preset → ⏩ 50 epochs twice. Train RMSE goes near 0. Test RMSE stays high or rises. The model has 144 numbers (18 vectors × 8) for only 38 training ratings. It memorizes.</li>
+<li><b>Regularize:</b> Keep k=8. Raise λ to 0.3. Train error rises, test error drops. The gap shrinks.</li>
+<li><b>Learning rate:</b> Set η to 0.1. The curve gets noisy. Small η is smooth but slow.</li>
+</ul>
+<h2 style="margin-top:14px">Exam recap</h2>
+<ul class="small">
+<li>R ≈ Q·Pᵀ. Each row of Q is a movie (item) vector. Each row of P is a user vector. Missing rating = dot product.</li>
+<li>Fit only on <b>known</b> ratings. Minimize SSE + regularization (“error” + λ “length”).</li>
+<li>Too many factors with no regularization fits noise. This is overfitting. Test error rises for k beyond the real structure.</li>
+<li>GD uses all ratings per step. SGD uses one rating per step. SGD is noisier but much faster in practice.</li>
+</ul>
+<p class="legend"><b>Honest notes.</b> The ratings are synthetic. They were made from 2 hidden taste dimensions plus noise, so k=2 fits best here by design. Real data has no known right k. The two axes the model learns can be any rotation of “male/female” and “serious/funny”. Do not expect labeled axes. With k=1 the plot has only a horizontal axis.</p>
+</section>
+</div>
+
+<script>
+// ---------- data ----------
+const USERS=['Alice','Bob','Carol','Dave','Eve','Frank','Grace','Heidi'];
+const MOVIES=['Lion King','Braveheart','Amadeus','Dumb & Dumber','Princess Diaries','Lethal Weapon','Independence Day','Color Purple',"Ocean's 11",'Sense & Sensibility'];
+const R=[[3,2,3,2,4,2,2,5,3,4],[3,5,4,3,2,4,4,2,3,2],[4,1,3,4,5,3,3,3,3,4],[2,3,3,5,3,5,4,2,4,1],[4,4,4,2,3,2,3,5,3,4],[2,3,2,4,3,4,4,2,3,1],[4,3,4,2,4,2,2,5,2,5],[3,5,4,3,2,4,3,4,3,3]];
+const TRAIN_PAIRS=[[0,2],[0,3],[0,4],[0,5],[0,9],[1,3],[1,4],[1,8],[2,0],[2,1],[2,5],[2,7],[3,0],[3,2],[3,3],[3,4],[3,6],[3,8],[4,0],[4,1],[4,7],[4,8],[4,9],[5,0],[5,1],[5,6],[5,7],[5,9],[6,0],[6,2],[6,3],[6,4],[6,5],[6,6],[6,9],[7,0],[7,7],[7,8]];
+const TEST_PAIRS=[[0,7],[1,7],[1,9],[2,3],[3,1],[3,7],[4,5],[4,6],[6,7],[6,8]];
+const TRAIN=TRAIN_PAIRS.map(([u,m])=>[u,m,R[u][m]]);
+const TEST=TEST_PAIRS.map(([u,m])=>[u,m,R[u][m]]);
+const KIND=USERS.map(()=>MOVIES.map(()=>'miss'));
+TRAIN.forEach(([u,m])=>KIND[u][m]='train');
+TEST.forEach(([u,m])=>KIND[u][m]='test');
+
+// ---------- helpers ----------
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;');
+const f2=(x,d=2)=>Number.isFinite(x)?x.toFixed(d).replace('-','−'):'NaN';
+const f3=x=>f2(x,3);
+const dot=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s};
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gauss(r){return Math.sqrt(-2*Math.log(r()+1e-9))*Math.cos(2*Math.PI*r())}
+const INIT_STD=0.3, MAXEP=500;
+
+// ---------- state ----------
+let k=2,lr=0.03,lam=0.1,center=true;
+let mu=0,Q=[],P=[],rnd,order=[],pos=0,epoch=0,hist=[],last=null,diverged=false;
+let selU=0,selM=7,ghost=null,timer=null,acc=0;
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function pred(u,m){return mu+dot(Q[m],P[u])}
+function rmse(set){let s=0;for(const [u,m,r] of set){const e=r-pred(u,m);s+=e*e}return Math.sqrt(s/set.length)}
+
+function init(){
+  stopPlay();
+  rnd=rng(7);
+  mu=center?TRAIN.reduce((a,x)=>a+x[2],0)/TRAIN.length:0;
+  Q=MOVIES.map(()=>Array.from({length:k},()=>INIT_STD*gauss(rnd)));
+  P=USERS.map(()=>Array.from({length:k},()=>INIT_STD*gauss(rnd)));
+  order=shuffle(TRAIN.map((_,i)=>i));
+  pos=0;epoch=0;last=null;diverged=false;
+  hist=[{e:0,tr:rmse(TRAIN),te:rmse(TEST)}];
+}
+
+function stepOnce(){
+  if(diverged||epoch>=MAXEP)return false;
+  const [u,m,r]=TRAIN[order[pos]];
+  const q=Q[m].slice(),p=P[u].slice();
+  const rh=mu+dot(q,p),err=r-rh;
+  const dq=[],dp=[];
+  for(let f=0;f<k;f++){
+    dq[f]=lr*(err*p[f]-lam*q[f]);
+    dp[f]=lr*(err*q[f]-lam*p[f]);
+    Q[m][f]=q[f]+dq[f];
+    P[u][f]=p[f]+dp[f];
+  }
+  last={u,m,r,rh,err,q,p,dq,dp,nq:Q[m].slice(),np:P[u].slice(),idx:pos+1,ep:epoch+1,lr,lam};
+  selU=u;selM=m;
+  if(!Q[m].concat(P[u]).every(v=>Number.isFinite(v)&&Math.abs(v)<50))diverged=true;
+  pos++;
+  if(pos===TRAIN.length){
+    pos=0;epoch++;
+    order=shuffle(TRAIN.map((_,i)=>i));
+    hist.push({e:epoch,tr:rmse(TRAIN),te:rmse(TEST)});
+  }
+  return true;
+}
+function flash(){
+  for(const id of ['f-pred','f-err','f-q','f-p']){const el=$(id);el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash')}
+}
+function runEpochs(n){
+  const target=Math.min(MAXEP,epoch+n);
+  while(epoch<target&&!diverged)stepOnce();
+}
+
+// ---------- render: matrix ----------
+function renderMatrix(){
+  let h='<table class="m"><thead><tr><th></th>'+MOVIES.map(n=>`<th><div class="vh">${esc(n)}</div></th>`).join('')+'</tr></thead><tbody>';
+  for(let u=0;u<USERS.length;u++){
+    h+=`<tr><th class="rh">${USERS[u]}</th>`;
+    for(let m=0;m<MOVIES.length;m++){
+      const kind=KIND[u][m],pr=pred(u,m);
+      let cls='c '+kind+(last&&last.u===u&&last.m===m?' cur':'')+(selU===u&&selM===m?' sel':'');
+      let st='';
+      if(kind!=='miss'){const e=Math.min(Math.abs(R[u][m]-pr)/2,1);st=`style="background:rgba(220,38,38,${(e*0.4).toFixed(2)})"`}
+      h+=`<td class="${cls}" data-u="${u}" data-m="${m}" ${st} title="${USERS[u]} × ${esc(MOVIES[m])} (${kind})"><div class="rt">${kind==='miss'?'–':R[u][m]}</div><div class="pr">${f2(pr,1)}</div></td>`;
+    }
+    h+='</tr>';
+  }
+  $('matrix').innerHTML=h+'</tbody></table>';
+}
+
+// ---------- render: plot ----------
+const SC=100,C=260,LIM=2.55;
+const clampv=v=>Math.max(-LIM,Math.min(LIM,v));
+const X=v=>C+clampv(v)*SC, Y=v=>C-clampv(v)*SC;
+const xy=v=>[v[0],v.length>1?v[1]:0];
+function arrow(u,sel){
+  const [vx,vy]=xy(P[u]);const tx=X(vx),ty=Y(vy);
+  const dx=tx-C,dy=ty-C,len=Math.hypot(dx,dy);
+  const col='var(--p)',op=sel?1:0.42,w=sel?3.2:1.8;
+  let s=`<line x1="${C}" y1="${C}" x2="${tx}" y2="${ty}" stroke="${col}" stroke-width="${w}" opacity="${op}"/>`;
+  if(len>6){
+    const ux=dx/len,uy=dy/len,nx=-uy,ny=ux,hx=tx-12*ux,hy=ty-12*uy;
+    s+=`<polygon points="${tx},${ty} ${hx+5*nx},${hy+5*ny} ${hx-5*nx},${hy-5*ny}" fill="${col}" opacity="${op}"/>`;
+  }
+  s+=`<text x="${tx+8}" y="${ty-8}" font-size="${sel?14:12}" font-weight="${sel?700:500}" fill="${col}" opacity="${sel?1:.75}">${USERS[u]}</text>`;
+  s+=`<circle data-k="u" data-i="${u}" cx="${tx}" cy="${ty}" r="12" fill="transparent" style="cursor:grab"/>`;
+  return s;
+}
+function renderPlot(){
+  let s='';
+  for(let g=-2;g<=2;g++){
+    s+=`<line x1="${X(g)}" y1="${Y(-LIM)}" x2="${X(g)}" y2="${Y(LIM)}" class="${g===0?'ax':'gr'}"/><line x1="${X(-LIM)}" y1="${Y(g)}" x2="${X(LIM)}" y2="${Y(g)}" class="${g===0?'ax':'gr'}"/>`;
+    if(g!==0)s+=`<text x="${X(g)}" y="${Y(0)+14}" font-size="10" fill="var(--mute)" text-anchor="middle">${g}</text><text x="${X(0)+4}" y="${Y(g)+4}" font-size="10" fill="var(--mute)">${g}</text>`;
+  }
+  s+=`<text x="${X(LIM)-4}" y="${Y(0)-6}" font-size="12" fill="var(--mute)" text-anchor="end">factor 1</text><text x="${X(0)+6}" y="${Y(LIM)+12}" font-size="12" fill="var(--mute)">factor 2</text>`;
+  const p2=xy(P[selU]),q2=xy(Q[selM]),pp=p2[0]**2+p2[1]**2;
+  if(pp>1e-6){
+    const t=(q2[0]*p2[0]+q2[1]*p2[1])/pp,px=t*p2[0],py=t*p2[1];
+    s+=`<line class="proj-d" x1="${X(q2[0])}" y1="${Y(q2[1])}" x2="${X(px)}" y2="${Y(py)}"/><line class="proj" x1="${C}" y1="${C}" x2="${X(px)}" y2="${Y(py)}"/>`;
+  }
+  for(let u=0;u<USERS.length;u++)if(u!==selU)s+=arrow(u,false);
+  s+=arrow(selU,true);
+  for(let m=0;m<MOVIES.length;m++){
+    const [vx,vy]=xy(Q[m]),sel=m===selM,cx=X(vx),cy=Y(vy);
+    s+=`<circle cx="${cx}" cy="${cy}" r="${sel?9:6.5}" fill="var(--q)" opacity="${sel?1:.78}" stroke="var(--card)" stroke-width="2"/>`;
+    s+=`<text x="${cx+10}" y="${cy+4}" font-size="${sel?13:11}" font-weight="${sel?700:400}" fill="var(--q)">${esc(MOVIES[m])}</text>`;
+    s+=`<circle data-k="m" data-i="${m}" cx="${cx}" cy="${cy}" r="12" fill="transparent" style="cursor:grab"/>`;
+  }
+  $('dyn').innerHTML=s;
+  $('plotNote').textContent=k===1?'k=1: every vector lies on the horizontal axis.':k===2?'k=2: this plot shows the whole model.':`k=${k}: the plot shows factors 1 and 2 only. The prediction below uses all ${k} factors, so the projection is only part of the story.`;
+  // readout
+  const q=Q[selM],p=P[selU],d=dot(q,p),rh=mu+d,kind=KIND[selU][selM];
+  const terms=k<=4?q.map((x,f)=>`${f2(x)}·${f2(p[f])}`).join(' + ')+' = ':'';
+  let act;
+  if(kind==='miss')act='Unrated. This prediction is the recommendation score.';
+  else{const r=R[selU][selM];act=`Actual r = <b>${r}</b> (${kind==='test'?'test, held out':'train'}) · error ε = ${f2(r-rh)}`}
+  $('readout').innerHTML=`<span class="p">${USERS[selU]}</span> × <span class="q">${esc(MOVIES[selM])}</span><br>q·p = ${terms}<b>${f2(d)}</b><br>r̂ = μ + q·p = ${f2(mu)} + ${f2(d)} = <b>${f2(rh)}</b><br>${act}`;
+}
+
+// ---------- render: stepper ----------
+function renderStep(){
+  $('warn').style.display=diverged?'block':'none';
+  $('progress').textContent=`Epoch ${epoch+1} · next rating ${pos+1} of ${TRAIN.length} · epochs finished: ${epoch}${epoch>=MAXEP?' (limit reached)':''}`;
+  if(!last){$('stepInfo').innerHTML='<span class="mute">Click <b>Step</b> to run SGD on one rating.</span>';$('stepTable').innerHTML='';return}
+  const L=last,q0=L.q[0],p0=L.p[0];
+  $('stepInfo').innerHTML=
+   `<div><b>Rating used:</b> <span class="p">${USERS[L.u]}</span> × <span class="q">${esc(MOVIES[L.m])}</span>, r = <b>${L.r}</b> <span class="mute">(epoch ${L.ep}, rating ${L.idx} of ${TRAIN.length})</span></div>`+
+   `<div>r̂ = μ + q·p = ${f2(mu)} + ${f3(dot(L.q,L.p))} = <b>${f3(L.rh)}</b></div>`+
+   `<div><span class="e">ε = r − r̂ = ${L.r} − ${f3(L.rh)} = ${f3(L.err)}</span></div>`+
+   `<div class="small" style="margin-top:4px">Factor 1 worked out:<br>`+
+   `<span class="q">q₁</span> = ${f3(q0)} + ${L.lr}·(<span class="e">${f3(L.err)}</span>·${f3(p0)} − ${L.lam}·${f3(q0)}) = <b>${f3(L.nq[0])}</b><br>`+
+   `<span class="p">p₁</span> = ${f3(p0)} + ${L.lr}·(<span class="e">${f3(L.err)}</span>·${f3(q0)} − ${L.lam}·${f3(p0)}) = <b>${f3(L.np[0])}</b></div>`+
+   `<div class="small mute" style="margin-top:4px">Only this movie's <span class="q">q</span> and this user's <span class="p">p</span> changed. All other vectors stayed the same.</div>`;
+  let t='<table class="s"><thead><tr><th>factor</th><th>q old</th><th>Δq</th><th>q new</th><th>p old</th><th>Δp</th><th>p new</th></tr></thead><tbody>';
+  const sg=x=>`<span class="${x>=0?'pos':'neg'}">${x>=0?'+':'−'}${Math.abs(x).toFixed(3)}</span>`;
+  for(let f=0;f<k;f++){
+    t+=`<tr><th>${f+1}</th><td>${f3(L.q[f])}</td><td class="chg">${sg(L.dq[f])}</td><td class="chg">${f3(L.nq[f])}</td><td>${f3(L.p[f])}</td><td class="chg">${sg(L.dp[f])}</td><td class="chg">${f3(L.np[f])}</td></tr>`;
+  }
+  $('stepTable').innerHTML=t+'</tbody></table>';
+}
+
+// ---------- render: chart ----------
+function renderChart(){
+  const W=560,H=300,ml=46,mr=14,mt=14,mb=36,iw=W-ml-mr,ih=H-mt-mb;
+  const all=hist.concat(ghost?ghost.hist:[]);
+  let mx=0,E=0;
+  all.forEach(h=>{mx=Math.max(mx,h.tr,h.te);E=Math.max(E,h.e)});
+  const yMax=Math.max(1.5,Math.ceil(mx*2)/2);
+  const xMax=E<=10?10:E<=20?20:E<=50?50:E<=100?100:Math.ceil(E/100)*100;
+  const sx=e=>ml+e/xMax*iw,sy=v=>mt+ih-v/yMax*ih;
+  let s='';
+  const ys=yMax<=3?0.5:1;
+  for(let v=0;v<=yMax+1e-9;v+=ys)s+=`<line x1="${ml}" x2="${W-mr}" y1="${sy(v)}" y2="${sy(v)}" stroke="var(--line)"/><text x="${ml-6}" y="${sy(v)+4}" font-size="11" fill="var(--mute)" text-anchor="end">${v.toFixed(1)}</text>`;
+  for(let i=0;i<=5;i++){const e=xMax*i/5;s+=`<text x="${sx(e)}" y="${H-mb+16}" font-size="11" fill="var(--mute)" text-anchor="middle">${Math.round(e)}</text>`}
+  s+=`<text x="${ml+iw/2}" y="${H-4}" font-size="12" fill="var(--mute)" text-anchor="middle">epoch</text><text x="12" y="${mt+ih/2}" font-size="12" fill="var(--mute)" text-anchor="middle" transform="rotate(-90 12 ${mt+ih/2})">RMSE</text>`;
+  const line=(hs,key,col,dash,op)=>hs.length>1?`<polyline fill="none" stroke="${col}" stroke-width="2.2" ${dash?'stroke-dasharray="5 4"':''} opacity="${op}" points="${hs.map(h=>sx(h.e)+','+sy(h[key])).join(' ')}"/>`:'';
+  if(ghost){s+=line(ghost.hist,'tr','var(--train)',true,.4)+line(ghost.hist,'te','var(--test)',true,.4)}
+  s+=line(hist,'tr','var(--train)',false,1)+line(hist,'te','var(--test)',false,1);
+  const last_=hist[hist.length-1];
+  s+=`<circle cx="${sx(last_.e)}" cy="${sy(last_.tr)}" r="4" fill="var(--train)"/><circle cx="${sx(last_.e)}" cy="${sy(last_.te)}" r="4" fill="var(--test)"/>`;
+  let best=hist[0];hist.forEach(h=>{if(h.te<best.te)best=h});
+  if(hist.length>3){s+=`<circle cx="${sx(best.e)}" cy="${sy(best.te)}" r="7" fill="none" stroke="var(--test)" stroke-width="2"/><text x="${sx(best.e)}" y="${sy(best.te)-11}" font-size="11" fill="var(--test)" text-anchor="middle">best test</text>`}
+  const lx=W-mr-4;
+  s+=`<g font-size="12"><line x1="${lx-150}" x2="${lx-130}" y1="${mt+8}" y2="${mt+8}" stroke="var(--train)" stroke-width="2.5"/><text x="${lx-124}" y="${mt+12}" fill="var(--ink)">train</text><line x1="${lx-80}" x2="${lx-60}" y1="${mt+8}" y2="${mt+8}" stroke="var(--test)" stroke-width="2.5"/><text x="${lx-54}" y="${mt+12}" fill="var(--ink)">test</text></g>`;
+  if(ghost)s+=`<text x="${lx}" y="${mt+30}" font-size="11" fill="var(--mute)" text-anchor="end">dashed = pinned (${ghost.label})</text>`;
+  $('chart').innerHTML=s;
+  // live numbers + badge
+  const tr=rmse(TRAIN),te=rmse(TEST);
+  $('live').innerHTML=`<span>k=<b>${k}</b></span><span>λ=<b>${lam.toFixed(2)}</b></span><span>μ=<b>${f2(mu)}</b></span><span class="mute">|</span><span style="color:var(--train)">train RMSE <b>${f3(tr)}</b></span><span style="color:var(--test)">test RMSE <b>${f3(te)}</b></span><span>gap <b>${f3(te-tr)}</b></span>`;
+  let b;
+  if(diverged)b=['warn','Diverged. Lower η and reset.'];
+  else if(epoch<5)b=['info','Run at least 5 epochs to judge fit.'];
+  else{
+    const rise=last_.te-best.te;
+    if(rise>0.05&&last_.tr<best.tr-0.02)b=['warn',`Overfitting: test RMSE is ${f2(rise)} above its best (epoch ${best.e}) while train RMSE keeps falling.`];
+    else if(last_.te-last_.tr>0.4)b=['info',`Big gap (${f2(last_.te-last_.tr)}) but test RMSE has not risen from its best. Compare it with a smaller-k or higher-λ run.`];
+    else b=['ok','No sign of overfitting.'];
+  }
+  $('badge').innerHTML=`<span class="badge ${b[0]}">${b[1]}</span>`;
+}
+
+function render(){renderMatrix();renderPlot();renderStep();renderChart()}
+
+// ---------- controls ----------
+function labels(){
+  $('kVal').textContent=k;$('lrVal').textContent=lr.toFixed(3);$('lamVal').textContent=lam.toFixed(2);
+}
+function stopPlay(){if(timer){clearInterval(timer);timer=null}const b=$('play');if(b)b.textContent='▶ Play'}
+function startPlay(){
+  if(timer)return;
+  $('play').textContent='⏸ Pause';
+  timer=setInterval(()=>{
+    acc+=(+$('speed').value)/20;let n=0;
+    while(acc>=1&&n<50){if(!stepOnce())break;if(n===0)flash();acc-=1;n++}
+    if(acc>=1)acc=0;
+    render();
+    if(diverged||epoch>=MAXEP)stopPlay();
+  },50);
+}
+function restart(){init();render()}
+
+$('k').addEventListener('input',e=>{k=+e.target.value;labels();restart()});
+$('lr').addEventListener('input',e=>{lr=+e.target.value;labels()});
+$('lam').addEventListener('input',e=>{lam=+e.target.value;labels();renderChart()});
+$('center').addEventListener('change',e=>{center=e.target.checked;restart()});
+function preset(kk,ll){k=kk;lam=ll;$('k').value=kk;$('lam').value=ll;labels();restart()}
+$('pGood').addEventListener('click',()=>preset(2,0.1));
+$('pOver').addEventListener('click',()=>preset(8,0));
+$('step').addEventListener('click',()=>{stopPlay();if(stepOnce())flash();render()});
+$('play').addEventListener('click',()=>timer?stopPlay():startPlay());
+$('epochBtn').addEventListener('click',()=>{stopPlay();runEpochs(1);render()});
+$('run50').addEventListener('click',()=>{stopPlay();runEpochs(50);render()});
+$('reset').addEventListener('click',restart);
+$('pin').addEventListener('click',()=>{ghost={hist:hist.map(h=>({...h})),label:`k=${k}, λ=${lam.toFixed(2)}`};renderChart()});
+$('unpin').addEventListener('click',()=>{ghost=null;renderChart()});
+
+$('selU').innerHTML=USERS.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+$('selM').innerHTML=MOVIES.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join('');
+function syncSel(){$('selU').value=selU;$('selM').value=selM}
+$('selU').addEventListener('change',e=>{selU=+e.target.value;render()});
+$('selM').addEventListener('change',e=>{selM=+e.target.value;render()});
+$('matrix').addEventListener('click',e=>{
+  const td=e.target.closest('td.c');if(!td)return;
+  selU=+td.dataset.u;selM=+td.dataset.m;syncSel();render();
+});
+
+// drag
+let drag=null;
+const plot=$('plot');
+plot.addEventListener('pointerdown',e=>{
+  const t=e.target.closest('[data-k]');if(!t)return;
+  drag={kind:t.dataset.k,i:+t.dataset.i};
+  if(drag.kind==='u')selU=drag.i;else selM=drag.i;
+  syncSel();
+  try{plot.setPointerCapture(e.pointerId)}catch(_){}
+  e.preventDefault();
+});
+plot.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const r=plot.getBoundingClientRect();
+  const sx=(e.clientX-r.left)*(520/r.width),sy=(e.clientY-r.top)*(520/r.height);
+  const vx=clampv((sx-C)/SC),vy=clampv((C-sy)/SC);
+  const vec=drag.kind==='u'?P[drag.i]:Q[drag.i];
+  vec[0]=vx;if(k>1)vec[1]=vy;
+  renderMatrix();renderPlot();renderChart();
+});
+const endDrag=()=>{drag=null};
+plot.addEventListener('pointerup',endDrag);
+plot.addEventListener('pointercancel',endDrag);
+
+// ---------- start ----------
+labels();init();syncSel();render();
+</script>
+</body>
+</html>
