@@ -1,0 +1,11 @@
+Make me an interactive html page (one file) that teaches latent factor models and SGD for recommender systems.
+
+use a small fake movie ratings matrix (8 users, 10 movies, some missing) with movies like Lion King, Braveheart, Amadeus, Dumb and Dumber. hold out some ratings as a test set.
+
+it should have:
+- a 2D plot where movies are dots and users are arrows. i can drag them and see the predicted rating (dot product) change live
+- an SGD stepper with step / play / reset buttons that shows the error and how the vectors move each step
+- sliders for learning rate, lambda, and number of factors k
+- a chart of train vs test error so i can see overfitting when k is big and lambda is 0
+
+show the formulas (r̂ = q·p, and the SGD update) and highlight whatever changes each step. keep it clean and easy to use, also ensure that it doesn't overfit.
